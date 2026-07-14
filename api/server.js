@@ -11,7 +11,7 @@ app.get("/health", (req, res) => res.json({ status: "ok", service: "meditrack-ap
 // listar alergias
 app.get("/alergias", (req, res) => res.json(alergias));
 
-// registrar una alergia (historia MEDI-42)
+// registrar una alergia
 app.post("/alergias", (req, res) => {
   const { paciente, alergia } = req.body || {};
   if (!paciente || !alergia)
@@ -21,6 +21,6 @@ app.post("/alergias", (req, res) => {
   res.status(201).json(registro);
 });
 
-app.get("/", (req, res) => res.send("MediTrack API - registrar alergias (MEDI-42) en Azure - v1.4"));
+app.get("/", (req, res) => res.send("MediTrack API - registrar alergias en Azure - v1.4"));
 
 app.listen(PORT, () => console.log(`meditrack-api escuchando en puerto ${PORT}`));
