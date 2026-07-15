@@ -1,0 +1,41 @@
+name: Rollback AKS (manual)
+on:
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: "Ambiente"
+        required: true
+        default: "prod"
+        type: choice
+        options: [dev, qa, prod]
+      revision:
+        description: "Revisión destino (0 = anterior)"
+        required: true
+        default: "0"
+        type: string
+permissions:
+  contents: read
+env:
+  RESOURCE_GROUP: rg-devops-curso-AS2
+  AKS_NAME: aks-devops-final-as2
+jobs:
+  rollback:
+    runs-on: ubuntu-latest
+    environment: ${{ inputs.environment }}
+    steps:
+      - uses: azure/login@v2
+        with:
+          creds: ${{ secrets.AZURE_CREDENTIALS }}
+      - run: az aks get-credentials -g $RESOURCE_GROUP -n $AKS_NAME --overwrite-existing
+      - name: Ejecutar rollback
+        run: |
+          NS=meditrack-${{ inputs.environment }}
+          REV="${{ inputs.revision }}"
+          for dep in meditrack-api meditrack-web; do
+            if [ "$REV" = "0" ]; then
+              kubectl rollout undo deployment/$dep -n $NS
+            else
+              kubectl rollout undo deployment/$dep -n $NS --to-revision=$REV
+            fi
+            kubectl rollout status deployment/$dep -n $NS --timeout=180s
+          done

@@ -1,8 +1,14 @@
 {
   "name": "meditrack-api",
   "version": "1.0.0",
-  "description": "API de MediTrack - registrar alergias",
+  "description": "API de MediTrack - pacientes y registros medicos",
   "main": "server.js",
-  "scripts": { "start": "node server.js" },
-  "dependencies": { "express": "^4.19.2" }
+  "scripts": {
+    "start": "node server.js"
+  },
+  "dependencies": {
+    "cors": "^2.8.6",
+    "express": "^4.19.2",
+    "pg": "^8.11.0"
+  }
 }

@@ -1,0 +1,6 @@
+namespace: meditrack-prod
+resources:
+  - ../../base
+replicas:
+  - name: meditrack-api
+    count: 2

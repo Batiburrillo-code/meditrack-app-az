@@ -1,29 +1,74 @@
-name: CI/CD - MediTrack API a AKS
+name: MediTrack CI/CD (Azure)
 on:
   push:
     branches: [ main ]
+  workflow_dispatch:
+permissions:
+  contents: read
 env:
+  RESOURCE_GROUP: rg-devops-curso-AS2
   ACR_NAME: acrdevopsfinalas2
-  RG: rg-devops-curso-AS2
   AKS_NAME: aks-devops-final-as2
-  NS: meditrack-dev
-  IMAGE: meditrack-api
 jobs:
-  build-and-deploy:
+  build:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - name: Login a Azure
-        uses: azure/login@v2
+      - uses: azure/login@v2
         with:
           creds: ${{ secrets.AZURE_CREDENTIALS }}
-      - name: Build y push a ACR
-        run: az acr build --registry $ACR_NAME --image $IMAGE:${{ github.sha }} ./api
-      - name: Credenciales de AKS
-        run: az aks get-credentials --resource-group $RG --name $AKS_NAME --overwrite-existing
-      - name: Desplegar en AKS
+      - name: Construir imagen API en ACR (tag por SHA)
+        run: az acr build --registry $ACR_NAME --image meditrack-api:${{ github.sha }} api/
+      - name: Construir imagen Portal en ACR (tag por SHA)
+        run: az acr build --registry $ACR_NAME --image meditrack-web:${{ github.sha }} web/
+
+  deploy-dev:
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: azure/login@v2
+        with:
+          creds: ${{ secrets.AZURE_CREDENTIALS }}
+      - run: az aks get-credentials -g $RESOURCE_GROUP -n $AKS_NAME --overwrite-existing
+      - run: kubectl apply -k k8s/overlays/dev
+      - run: kubectl set image deployment/meditrack-api meditrack-api=$ACR_NAME.azurecr.io/meditrack-api:${{ github.sha }} -n meditrack-dev
+      - run: kubectl set image deployment/meditrack-web meditrack-web=$ACR_NAME.azurecr.io/meditrack-web:${{ github.sha }} -n meditrack-dev
+      - run: kubectl rollout status deployment/meditrack-api -n meditrack-dev --timeout=180s
+      - run: kubectl rollout status deployment/meditrack-web -n meditrack-dev --timeout=180s
+
+  deploy-qa:
+    needs: deploy-dev
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: azure/login@v2
+        with:
+          creds: ${{ secrets.AZURE_CREDENTIALS }}
+      - run: az aks get-credentials -g $RESOURCE_GROUP -n $AKS_NAME --overwrite-existing
+      - run: kubectl apply -k k8s/overlays/qa
+      - run: kubectl set image deployment/meditrack-api meditrack-api=$ACR_NAME.azurecr.io/meditrack-api:${{ github.sha }} -n meditrack-qa
+      - run: kubectl set image deployment/meditrack-web meditrack-web=$ACR_NAME.azurecr.io/meditrack-web:${{ github.sha }} -n meditrack-qa
+      - run: kubectl rollout status deployment/meditrack-api -n meditrack-qa --timeout=180s
+      - run: kubectl rollout status deployment/meditrack-web -n meditrack-qa --timeout=180s
+
+  deploy-prod:
+    needs: deploy-qa
+    runs-on: ubuntu-latest
+    environment: prod
+    steps:
+      - uses: actions/checkout@v4
+      - uses: azure/login@v2
+        with:
+          creds: ${{ secrets.AZURE_CREDENTIALS }}
+      - run: az aks get-credentials -g $RESOURCE_GROUP -n $AKS_NAME --overwrite-existing
+      - run: kubectl apply -k k8s/overlays/prod
+      - run: kubectl set image deployment/meditrack-api meditrack-api=$ACR_NAME.azurecr.io/meditrack-api:${{ github.sha }} -n meditrack-prod
+      - run: kubectl set image deployment/meditrack-web meditrack-web=$ACR_NAME.azurecr.io/meditrack-web:${{ github.sha }} -n meditrack-prod
+      - run: kubectl rollout status deployment/meditrack-api -n meditrack-prod --timeout=180s
+      - run: kubectl rollout status deployment/meditrack-web -n meditrack-prod --timeout=180s
+      - name: Rollback automatico si falla
+        if: failure()
         run: |
-          kubectl apply -f k8s/deployment.yaml
-          kubectl apply -f k8s/service.yaml
-          kubectl set image deployment/meditrack-api meditrack-api=$ACR_NAME.azurecr.io/$IMAGE:${{ github.sha }} -n $NS
-          kubectl rollout status deployment/meditrack-api -n $NS
+          kubectl rollout undo deployment/meditrack-api -n meditrack-prod
+          kubectl rollout undo deployment/meditrack-web -n meditrack-prod

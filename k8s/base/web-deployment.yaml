@@ -1,0 +1,17 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: meditrack-web
+spec:
+  replicas: 1
+  selector:
+    matchLabels: { app: meditrack-web }
+  template:
+    metadata:
+      labels: { app: meditrack-web }
+    spec:
+      containers:
+        - name: meditrack-web
+          image: acrdevopsfinalas2.azurecr.io/meditrack-web:latest
+          ports:
+            - containerPort: 80
