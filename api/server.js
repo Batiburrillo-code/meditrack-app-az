@@ -24,11 +24,19 @@ app.get("/pacientes", wrap(async (req, res) => {
 app.post("/pacientes", wrap(async (req, res) => {
   const { nombre, edad, nss, alergias } = req.body || {};
   if (!nombre) return res.status(400).json({ error: "El nombre es obligatorio" });
-  const { rows } = await pool.query(
-    "INSERT INTO pacientes (nombre, edad, nss, alergias) VALUES ($1,$2,$3,$4) RETURNING *",
-    [nombre, edad, nss, alergias]
-  );
-  res.status(201).json(rows[0]);
+  if (edad != null && (edad < 0 || edad > 120))
+    return res.status(400).json({ error: "La edad debe estar entre 0 y 120" });
+  try {
+    const { rows } = await pool.query(
+      "INSERT INTO pacientes (nombre, edad, nss, alergias) VALUES ($1,$2,$3,$4) RETURNING *",
+      [nombre, edad, nss, alergias]
+    );
+    res.status(201).json(rows[0]);
+  } catch (e) {
+    if (e.code === "23505")
+      return res.status(400).json({ error: "Ya existe un paciente con ese NSS" });
+    throw e;
+  }
 }));
 app.get("/pacientes/:id/registros", wrap(async (req, res) => {
   const { rows } = await pool.query(
