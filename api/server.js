@@ -10,6 +10,14 @@ const wrap = (fn) => (req, res) => fn(req, res).catch((e) => {
 });
 app.get("/health", (req, res) => res.json({ status: "ok", service: "meditrack-api" }));
 app.get("/pacientes", wrap(async (req, res) => {
+  const { nombre } = req.query;
+  if (nombre) {
+    const { rows } = await pool.query(
+      "SELECT * FROM pacientes WHERE nombre ILIKE $1 ORDER BY id",
+      [`%${nombre}%`]
+    );
+    return res.json(rows);
+  }
   const { rows } = await pool.query("SELECT * FROM pacientes ORDER BY id");
   res.json(rows);
 }));
