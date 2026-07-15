@@ -3,4 +3,4 @@ resources:
   - ../../base
 replicas:
   - name: meditrack-api
-    count: 2
+    count: 3
