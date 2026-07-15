@@ -28,6 +28,9 @@ async function initDb() {
       consultorio TEXT
     );
   `);
+  await pool.query(`
+    ALTER TABLE pacientes ADD COLUMN IF NOT EXISTS creado_en TIMESTAMP DEFAULT NOW();
+  `);
   console.log("[db] tablas listas");
 }
 module.exports = { pool, initDb };
