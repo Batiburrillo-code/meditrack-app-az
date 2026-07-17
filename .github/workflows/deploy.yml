@@ -35,6 +35,13 @@ jobs:
       - uses: azure/login@v2
         with:
           creds: ${{ secrets.AZURE_CREDENTIALS }}
+      - name: Asegurar que el AKS este encendido
+        run: |
+          STATE=$(az aks show -g $RESOURCE_GROUP -n $AKS_NAME --query powerState.code -o tsv)
+          echo "Estado del AKS: $STATE"
+          if [ "$STATE" != "Running" ]; then
+            echo "Encendiendo el AKS..."; az aks start -g $RESOURCE_GROUP -n $AKS_NAME
+          fi
       - run: az aks get-credentials -g $RESOURCE_GROUP -n $AKS_NAME --overwrite-existing
       - run: kubectl apply -k k8s/overlays/dev
       - run: kubectl set image deployment/meditrack-api meditrack-api=$ACR_NAME.azurecr.io/meditrack-api:${{ github.sha }} -n meditrack-dev
@@ -69,6 +76,10 @@ jobs:
       - uses: azure/login@v2
         with:
           creds: ${{ secrets.AZURE_CREDENTIALS }}
+      - name: Asegurar que el AKS este encendido
+        run: |
+          STATE=$(az aks show -g $RESOURCE_GROUP -n $AKS_NAME --query powerState.code -o tsv)
+          if [ "$STATE" != "Running" ]; then az aks start -g $RESOURCE_GROUP -n $AKS_NAME; fi
       - run: az aks get-credentials -g $RESOURCE_GROUP -n $AKS_NAME --overwrite-existing
       - run: kubectl apply -k k8s/overlays/qa
       - run: kubectl set image deployment/meditrack-api meditrack-api=$ACR_NAME.azurecr.io/meditrack-api:${{ github.sha }} -n meditrack-qa
@@ -104,6 +115,10 @@ jobs:
       - uses: azure/login@v2
         with:
           creds: ${{ secrets.AZURE_CREDENTIALS }}
+      - name: Asegurar que el AKS este encendido
+        run: |
+          STATE=$(az aks show -g $RESOURCE_GROUP -n $AKS_NAME --query powerState.code -o tsv)
+          if [ "$STATE" != "Running" ]; then az aks start -g $RESOURCE_GROUP -n $AKS_NAME; fi
       - run: az aks get-credentials -g $RESOURCE_GROUP -n $AKS_NAME --overwrite-existing
       - run: kubectl apply -k k8s/overlays/prod
       - run: kubectl set image deployment/meditrack-api meditrack-api=$ACR_NAME.azurecr.io/meditrack-api:${{ github.sha }} -n meditrack-prod
