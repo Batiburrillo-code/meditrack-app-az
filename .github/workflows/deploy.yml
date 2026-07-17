@@ -1,25 +1,30 @@
 name: MediTrack CI/CD (Azure)
+
 on:
   push:
     branches: [ main ]
   workflow_dispatch:
-permissions:
-  contents: read
+
 env:
   RESOURCE_GROUP: rg-devops-curso-AS2
   ACR_NAME: acrdevopsfinalas2
   AKS_NAME: aks-devops-final-as2
+
 jobs:
   build:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+      - name: Validar sintaxis de la API (Node)
+        run: |
+          node --check api/server.js
+          node --check api/db.js
       - uses: azure/login@v2
         with:
           creds: ${{ secrets.AZURE_CREDENTIALS }}
-      - name: Construir imagen API en ACR (tag por SHA)
+      - name: Construir imagen API en ACR (tag SHA)
         run: az acr build --registry $ACR_NAME --image meditrack-api:${{ github.sha }} api/
-      - name: Construir imagen Portal en ACR (tag por SHA)
+      - name: Construir imagen Portal en ACR (tag SHA)
         run: az acr build --registry $ACR_NAME --image meditrack-web:${{ github.sha }} web/
 
   deploy-dev:
@@ -34,8 +39,27 @@ jobs:
       - run: kubectl apply -k k8s/overlays/dev
       - run: kubectl set image deployment/meditrack-api meditrack-api=$ACR_NAME.azurecr.io/meditrack-api:${{ github.sha }} -n meditrack-dev
       - run: kubectl set image deployment/meditrack-web meditrack-web=$ACR_NAME.azurecr.io/meditrack-web:${{ github.sha }} -n meditrack-dev
-      - run: kubectl rollout status deployment/meditrack-api -n meditrack-dev --timeout=180s
-      - run: kubectl rollout status deployment/meditrack-web -n meditrack-dev --timeout=180s
+      - name: Verificar rollout
+        run: |
+          kubectl rollout status deployment/meditrack-api -n meditrack-dev --timeout=180s
+          kubectl rollout status deployment/meditrack-web -n meditrack-dev --timeout=180s
+      - name: Health check
+        run: |
+          for i in $(seq 1 12); do
+            IP=$(kubectl get svc meditrack-web-service -n meditrack-dev -o jsonpath='{.status.loadBalancer.ingress[0].ip}')
+            if [ -n "$IP" ] && curl --fail --silent "http://$IP/api/health"; then echo; echo "Health check OK ($IP)"; exit 0; fi
+            echo "Esperando IP publica / health... intento $i"; sleep 15
+          done
+          echo "El portal no respondio"; exit 1
+      - name: Mostrar recursos
+        run: |
+          kubectl get deployments -n meditrack-dev
+          kubectl get pods -n meditrack-dev
+          kubectl get services -n meditrack-dev
+      - name: Mostrar URL del portal
+        run: |
+          IP=$(kubectl get svc meditrack-web-service -n meditrack-dev -o jsonpath='{.status.loadBalancer.ingress[0].ip}')
+          echo "Portal disponible en: http://$IP"
 
   deploy-qa:
     needs: deploy-dev
@@ -49,8 +73,27 @@ jobs:
       - run: kubectl apply -k k8s/overlays/qa
       - run: kubectl set image deployment/meditrack-api meditrack-api=$ACR_NAME.azurecr.io/meditrack-api:${{ github.sha }} -n meditrack-qa
       - run: kubectl set image deployment/meditrack-web meditrack-web=$ACR_NAME.azurecr.io/meditrack-web:${{ github.sha }} -n meditrack-qa
-      - run: kubectl rollout status deployment/meditrack-api -n meditrack-qa --timeout=180s
-      - run: kubectl rollout status deployment/meditrack-web -n meditrack-qa --timeout=180s
+      - name: Verificar rollout
+        run: |
+          kubectl rollout status deployment/meditrack-api -n meditrack-qa --timeout=180s
+          kubectl rollout status deployment/meditrack-web -n meditrack-qa --timeout=180s
+      - name: Health check
+        run: |
+          for i in $(seq 1 12); do
+            IP=$(kubectl get svc meditrack-web-service -n meditrack-qa -o jsonpath='{.status.loadBalancer.ingress[0].ip}')
+            if [ -n "$IP" ] && curl --fail --silent "http://$IP/api/health"; then echo; echo "Health check OK ($IP)"; exit 0; fi
+            echo "Esperando IP publica / health... intento $i"; sleep 15
+          done
+          echo "El portal no respondio"; exit 1
+      - name: Mostrar recursos
+        run: |
+          kubectl get deployments -n meditrack-qa
+          kubectl get pods -n meditrack-qa
+          kubectl get services -n meditrack-qa
+      - name: Mostrar URL del portal
+        run: |
+          IP=$(kubectl get svc meditrack-web-service -n meditrack-qa -o jsonpath='{.status.loadBalancer.ingress[0].ip}')
+          echo "Portal disponible en: http://$IP"
 
   deploy-prod:
     needs: deploy-qa
@@ -65,8 +108,27 @@ jobs:
       - run: kubectl apply -k k8s/overlays/prod
       - run: kubectl set image deployment/meditrack-api meditrack-api=$ACR_NAME.azurecr.io/meditrack-api:${{ github.sha }} -n meditrack-prod
       - run: kubectl set image deployment/meditrack-web meditrack-web=$ACR_NAME.azurecr.io/meditrack-web:${{ github.sha }} -n meditrack-prod
-      - run: kubectl rollout status deployment/meditrack-api -n meditrack-prod --timeout=180s
-      - run: kubectl rollout status deployment/meditrack-web -n meditrack-prod --timeout=180s
+      - name: Verificar rollout
+        run: |
+          kubectl rollout status deployment/meditrack-api -n meditrack-prod --timeout=180s
+          kubectl rollout status deployment/meditrack-web -n meditrack-prod --timeout=180s
+      - name: Health check
+        run: |
+          for i in $(seq 1 12); do
+            IP=$(kubectl get svc meditrack-web-service -n meditrack-prod -o jsonpath='{.status.loadBalancer.ingress[0].ip}')
+            if [ -n "$IP" ] && curl --fail --silent "http://$IP/api/health"; then echo; echo "Health check OK ($IP)"; exit 0; fi
+            echo "Esperando IP publica / health... intento $i"; sleep 15
+          done
+          echo "El portal no respondio"; exit 1
+      - name: Mostrar recursos
+        run: |
+          kubectl get deployments -n meditrack-prod
+          kubectl get pods -n meditrack-prod
+          kubectl get services -n meditrack-prod
+      - name: Mostrar URL del portal
+        run: |
+          IP=$(kubectl get svc meditrack-web-service -n meditrack-prod -o jsonpath='{.status.loadBalancer.ingress[0].ip}')
+          echo "Portal disponible en: http://$IP"
       - name: Rollback automatico si falla
         if: failure()
         run: |
